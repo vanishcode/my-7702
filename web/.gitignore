@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.DS_Store
+
+# TypeScript incremental build cache / TS 增量构建缓存（机器相关，不入库）
+*.tsbuildinfo
