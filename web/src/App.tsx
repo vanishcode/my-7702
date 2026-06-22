@@ -39,8 +39,8 @@ export default function App() {
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">my-7702 · 测试 dapp</h1>
-          <p className="text-sm text-muted-foreground">最小化 EIP-7702 智能账户 · MegaETH 测试网 (6343)</p>
+          <h1 className="text-2xl font-bold">my-7702</h1>
+          <p className="text-sm text-muted-foreground">最小化 EIP-7702 智能账户</p>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
