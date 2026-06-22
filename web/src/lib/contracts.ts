@@ -3,13 +3,27 @@ import {type Address, parseEther} from "viem";
 const env = import.meta.env;
 
 /** 已部署到 MegaETH(6343) 的地址（broadcast/Deploy.s.sol/6343）/ deployed addresses. */
+/** 占位零地址：未配置某模块时用，配合 isDeployed 做兜底 / zero placeholder for an unset module address. */
+export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+
+/** 已部署到 MegaETH(6343) 的地址（broadcast/Deploy.s.sol/6343/run-latest.json，commit 129ec41）。 */
 export const ADDR = {
-  accountImpl: (env.VITE_ACCOUNT_IMPL ?? "0xd631F7D616DA826E5D36d5Fe4F5Ba62cC5b7B277") as Address,
-  sessionValidator: (env.VITE_SESSION_VALIDATOR ?? "0x54A776eF761591B3C4AdB455f3367450c95a1bEB") as Address,
-  webauthnValidator: (env.VITE_WEBAUTHN_VALIDATOR ?? "0xd220a5e17aDe9e729f6D40470a13803100D6fAC1") as Address,
-  spendingHook: (env.VITE_SPENDING_HOOK ?? "0xb5D566DF4B3ff76E3e3C93872FFe96Ae81a09c00") as Address,
-  exampleExecutor: (env.VITE_EXAMPLE_EXECUTOR ?? "0xFe0caA7B3B9eBc9370E81e22DA0502075F954FD2") as Address,
+  accountImpl: (env.VITE_ACCOUNT_IMPL ?? "0x056EB0b17d8640b6DD1582f82B12A44A408aB5b5") as Address,
+  sessionValidator: (env.VITE_SESSION_VALIDATOR ?? "0x0351db74C742C25b230F70D562d6f3FF51B5Bfa0") as Address,
+  webauthnValidator: (env.VITE_WEBAUTHN_VALIDATOR ?? "0x9267ab02DaaaC0069Eaf76efCD710469148C2888") as Address,
+  spendingHook: (env.VITE_SPENDING_HOOK ?? "0xAB715C33eFF07eAef731a5b4E625359828e635F9") as Address,
+  exampleExecutor: (env.VITE_EXAMPLE_EXECUTOR ?? "0xd066df02F5775C1b34b0CdC915fA37390115A141") as Address,
+  multisigValidator: (env.VITE_MULTISIG_VALIDATOR ?? "0x722a36Ff20ec0feFb8A9558a4FbB63EB19430d54") as Address,
 } as const;
+
+/** 某模块地址是否已部署（非占位零地址）/ whether a module address is deployed (not the zero placeholder). */
+export function isDeployed(addr: Address): boolean {
+  return addr.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
+}
+
+/** 默认 mint 代币：MegaETH 测试网 Mock USDM（symbol USDM，6 位小数，mint 公开免权限）。
+ *  Default mint token: MegaETH testnet Mock USDM (6 decimals, permissionless mint). */
+export const USDM_ADDRESS = "0x1BeFa17Db4c32dA66ec5A22e6462Fd8af839C788" as Address;
 
 /** ERC-7821 模式常量（取自 Account.sol）/ ERC-7821 mode constants. */
 export const MODE_BATCH = "0x0100000000000000000000000000000000000000000000000000000000000000" as const;
@@ -189,6 +203,55 @@ export const spendingHookAbi = [
   },
 ] as const;
 
+/** MultisigValidator 子集 ABI / subset of the multisig validator ABI. */
+export const multisigAbi = [
+  {
+    // 设置/更新多签配置（账户直调，msg.sender==account）/ set/update config, account-only.
+    type: "function",
+    name: "setConfig",
+    stateMutability: "nonpayable",
+    inputs: [
+      {name: "signers", type: "address[]"},
+      {name: "threshold", type: "uint256"},
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "getConfig",
+    stateMutability: "view",
+    inputs: [{name: "account", type: "address"}],
+    outputs: [
+      {name: "signers", type: "address[]"},
+      {name: "threshold", type: "uint256"},
+      {name: "exists", type: "bool"},
+    ],
+  },
+] as const;
+
+/** 最小 ERC20 ABI（mint + decimals + balanceOf），用于「批量执行」里的 mint 代币示例。
+ *  Minimal ERC20 ABI for the batch-execution mint demo. */
+export const erc20Abi = [
+  {
+    type: "function",
+    name: "mint",
+    stateMutability: "nonpayable",
+    inputs: [
+      {name: "to", type: "address"},
+      {name: "amount", type: "uint256"},
+    ],
+    outputs: [],
+  },
+  {type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{type: "uint8"}]},
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{name: "account", type: "address"}],
+    outputs: [{type: "uint256"}],
+  },
+] as const;
+
 /** ERC-7821 Call 元组的 ABI 参数描述（用于 encodeAbiParameters）/ ABI param for a Call[] tuple. */
 export const callTupleArrayParam = {
   type: "tuple[]",
@@ -233,6 +296,15 @@ export const PLUGINS: PluginMeta[] = [
     address: ADDR.webauthnValidator,
     desc: "Passkey(P256/WebAuthn) 验证器。安装后到「Passkey」面板注册公钥。",
     initData: () => "0x",
+  },
+  {
+    key: "multisig",
+    name: "MultisigValidator",
+    typeId: 1,
+    typeLabel: "validator",
+    address: ADDR.multisigValidator,
+    desc: "M-of-N 多签验证器：一笔执行需 ≥M 个登记签名者各签一份。安装后到「多签」面板配置签名者与阈值。",
+    initData: () => "0x", // 空安装；签名者/阈值在面板里 setConfig / install empty, configure in the panel
   },
   {
     key: "hook",

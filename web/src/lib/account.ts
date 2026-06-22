@@ -15,8 +15,10 @@ import {
   ADDR,
   accountAbi,
   callTupleArrayParam,
+  erc20Abi,
   MODE_BATCH,
   MODE_BATCH_OPDATA,
+  multisigAbi,
   sessionAbi,
   spendingHookAbi,
   webauthnAbi,
@@ -377,6 +379,114 @@ export async function setSpendLimit(pk: Hex, capWei: bigint): Promise<Hex> {
     to: ADDR.spendingHook,
     data: encodeFunctionData({abi: spendingHookAbi, functionName: "onInstall", args: [data]}),
   });
+}
+
+// ───────────────────────── 多签（type-1 validator）/ multisig ─────────────────────────
+
+/** MultisigValidator.getConfig 的镜像 / mirrors MultisigValidator.getConfig. */
+export interface MultisigConfig {
+  signers: readonly Address[]; // 登记签名者（链上保证严格升序、去重、非零）/ registered signers
+  threshold: bigint; // 放行所需最小签名数 M / required signatures M
+  exists: boolean;
+}
+
+/**
+ * 演示用联签私钥按账户存浏览器本地（仅测试网）。真实多签的签名者应是各自独立的设备/人，
+ * 这里把 N 把 co-signer 私钥都放在本地，只是为了让示例能在一个浏览器里凑齐 M 份签名。
+ * Demo co-signer keys kept per-account in localStorage so the example can gather M sigs in one browser.
+ */
+function multisigKey(account: Address) {
+  return `my7702.multisig.${account.toLowerCase()}`;
+}
+export function loadMultisigSignerPks(account: Address): Hex[] {
+  const v = localStorage.getItem(multisigKey(account));
+  if (!v) return [];
+  try {
+    const arr: unknown = JSON.parse(v);
+    return Array.isArray(arr) ? (arr.filter((x) => typeof x === "string" && /^0x[0-9a-fA-F]{64}$/.test(x)) as Hex[]) : [];
+  } catch {
+    return [];
+  }
+}
+export function saveMultisigSignerPks(account: Address, pks: Hex[]) {
+  localStorage.setItem(multisigKey(account), JSON.stringify(pks));
+}
+export function clearMultisigSignerPks(account: Address) {
+  localStorage.removeItem(multisigKey(account));
+}
+/** 生成 n 个演示联签私钥 / generate n demo co-signer keys. */
+export function genMultisigSignerPks(n: number): Hex[] {
+  return Array.from({length: n}, () => newPk());
+}
+/** 把私钥按其地址升序排序（合约要求签名严格升序）/ sort pks ascending by signer address. */
+export function sortSignerPks(pks: Hex[]): Hex[] {
+  return [...pks].sort((a, b) => (addrOf(a).toLowerCase() < addrOf(b).toLowerCase() ? -1 : 1));
+}
+
+/** 读取链上多签配置（exists=false 表示未配置）/ read the on-chain config (exists=false if none). */
+export async function getMultisigConfig(account: Address): Promise<MultisigConfig> {
+  const r = await publicClient.readContract({
+    address: ADDR.multisigValidator,
+    abi: multisigAbi,
+    functionName: "getConfig",
+    args: [account],
+  });
+  return {signers: r[0], threshold: r[1], exists: r[2]};
+}
+
+/**
+ * 设置/更新多签配置：账户(EOA)直接调用模块，模块以 msg.sender 为账户 key 落库（走 ROOT，无需卸载重装）。
+ * signers 必须严格升序、去重、非零，threshold ∈ [1, N]——本函数先排序，越界/重复由链上拒绝。
+ * Set/update config: the EOA calls the module directly (keyed by msg.sender == account).
+ */
+export async function setMultisigConfig(pk: Hex, signers: Address[], threshold: bigint): Promise<Hex> {
+  const {wallet} = walletOf(pk);
+  const sorted = [...signers].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : 1));
+  return wallet.sendTransaction({
+    to: ADDR.multisigValidator,
+    data: encodeFunctionData({abi: multisigAbi, functionName: "setConfig", args: [sorted, threshold]}),
+  });
+}
+
+/**
+ * 用多签授权一笔批量执行：给定的每个 co-signer 私钥各对 execHash 签名，按签名者地址升序拼成 bytes[]，
+ * 由 burner EOA 提交并自付 gas（任意地址都可提交）。作用域/阈值校验全在链上 validateExecution 完成。
+ * opData = abi.encode(multisigValidator, abi.encode(bytes[] sigs))；executionData = abi.encode(Call[], opData)。
+ * Each co-signer signs the execHash; sigs are sorted ascending and submitted by the burner EOA.
+ */
+export async function sendMultisigExecute(pk: Hex, signerPks: Hex[], calls: Call[]): Promise<Hex> {
+  const {wallet, account} = walletOf(pk);
+  const execHash = await buildExecHash(account.address, calls);
+  const sorted = sortSignerPks(signerPks);
+  const sigs: Hex[] = [];
+  for (const spk of sorted) {
+    const signature = await sign({hash: execHash, privateKey: spk});
+    sigs.push(serializeSignature(signature)); // r||s||v，v=27/28
+  }
+  const inner = encodeAbiParameters([{type: "bytes[]"}], [sigs]);
+  const opData = encodeAbiParameters([{type: "address"}, {type: "bytes"}], [ADDR.multisigValidator, inner]);
+  const executionData = encodeAbiParameters([callTupleArrayParam, {type: "bytes"}], [calls, opData]);
+  return wallet.sendTransaction({
+    to: account.address,
+    data: encodeFunctionData({abi: accountAbi, functionName: "execute", args: [MODE_BATCH_OPDATA, executionData]}),
+  });
+}
+
+// ───────────────────────── ERC20 mint（批量执行示例）/ ERC20 mint (batch demo) ─────────────────────────
+
+/** 读取 ERC20 小数位（失败时调用方自行兜底）/ read an ERC20's decimals. */
+export async function getErc20Decimals(token: Address): Promise<number> {
+  return publicClient.readContract({address: token, abi: erc20Abi, functionName: "decimals"});
+}
+
+/** 读取某地址的 ERC20 余额 / read an ERC20 balance. */
+export async function getErc20Balance(token: Address, owner: Address): Promise<bigint> {
+  return publicClient.readContract({address: token, abi: erc20Abi, functionName: "balanceOf", args: [owner]});
+}
+
+/** 编码 mint(to, amount) 的 calldata（amount 为最小单位）/ encode mint(to, amount) calldata (amount in base units). */
+export function encodeMintCall(to: Address, amount: bigint): Hex {
+  return encodeFunctionData({abi: erc20Abi, functionName: "mint", args: [to, amount]});
 }
 
 export async function waitReceipt(hash: Hex) {

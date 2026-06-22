@@ -13,6 +13,7 @@ import {PluginStore} from "@/components/PluginStore";
 import {BatchPanel} from "@/components/BatchPanel";
 import {SessionPanel} from "@/components/SessionPanel";
 import {SpendLimitPanel} from "@/components/SpendLimitPanel";
+import {MultisigPanel} from "@/components/MultisigPanel";
 
 export default function App() {
   const {pk, address, generate, importPk, clear} = useBurner();
@@ -67,7 +68,9 @@ export default function App() {
 
       <SpendLimitPanel pk={pk} account={address} delegated={delegated} refreshKey={refreshKey} bump={bump} />
 
-      <BatchPanel pk={pk} account={address} delegated={delegated} bump={bump} />
+      <MultisigPanel pk={pk} account={address} delegated={delegated} refreshKey={refreshKey} bump={bump} />
+
+      <BatchPanel pk={pk} account={address} delegated={delegated} refreshKey={refreshKey} bump={bump} />
 
       <footer className="pt-2 text-center text-xs text-muted-foreground">
         Account 实现 <span className="font-mono">{shortAddr(ADDR.accountImpl, 10, 8)}</span> · 仅测试网，私钥仅存浏览器本地
