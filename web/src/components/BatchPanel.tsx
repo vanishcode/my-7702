@@ -1,18 +1,20 @@
-import {useState} from "react";
-import {formatEther, isAddress, parseEther, type Address, type Hex} from "viem";
-import {Layers, Plus, Send, Trash2, Wand2} from "lucide-react";
+import {useEffect, useState} from "react";
+import {formatEther, formatUnits, isAddress, parseEther, parseUnits, type Address, type Hex} from "viem";
+import {Coins, Layers, Plus, Send, Trash2, Wand2} from "lucide-react";
 import {toast} from "sonner";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
-import {sendBatch, type Call} from "@/lib/account";
+import {encodeMintCall, getErc20Balance, getErc20Decimals, sendBatch, type Call} from "@/lib/account";
+import {USDM_ADDRESS} from "@/lib/contracts";
 import {runTx} from "@/lib/tx";
 
 interface Props {
   pk: Hex | null;
   account: Address | null;
   delegated: boolean;
+  refreshKey: number;
   bump: () => void;
 }
 
@@ -27,8 +29,31 @@ function emptyRow(): Row {
   return {target: "", value: "0", data: "0x"};
 }
 
-export function BatchPanel({pk, account, delegated, bump}: Props) {
+export function BatchPanel({pk, account, delegated, refreshKey, bump}: Props) {
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
+
+  // mint 第一笔：代币地址 + 数量 + 链上小数位/余额 / mint as the first call: token + amount + on-chain decimals/balance.
+  const [token, setToken] = useState<string>(USDM_ADDRESS);
+  const [mintAmt, setMintAmt] = useState("100");
+  const [decimals, setDecimals] = useState(6);
+  const [bal, setBal] = useState<bigint | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    if (!account || !delegated || !isAddress(token)) {
+      setBal(null);
+      return;
+    }
+    getErc20Decimals(token as Address)
+      .then((d) => alive && setDecimals(d))
+      .catch(() => {});
+    getErc20Balance(token as Address, account)
+      .then((b) => alive && setBal(b))
+      .catch(() => alive && setBal(null));
+    return () => {
+      alive = false;
+    };
+  }, [account, delegated, token, refreshKey]);
 
   function patch(i: number, p: Partial<Row>) {
     setRows((rs) => rs.map((r, j) => (j === i ? {...r, ...p} : r)));
@@ -40,12 +65,27 @@ export function BatchPanel({pk, account, delegated, bump}: Props) {
     setRows((rs) => (rs.length > 1 ? rs.filter((_, j) => j !== i) : rs));
   }
 
-  /** 填一个非破坏性示例：两笔自转账（账户 → 账户自身，净额为 0）/ a non-destructive demo: two self-transfers. */
-  function fillExample() {
+  /** 填充示例：第一笔 mint 代币到本账户，第二笔自转账——演示「mint + 转账」原子批量。
+   *  Fill the demo: first call mints tokens to the account, second is a self-transfer (atomic batch). */
+  async function fillExample() {
     if (!account) return;
+    if (!isAddress(token)) return toast.error("代币地址格式错误");
+    let dec = decimals;
+    try {
+      dec = await getErc20Decimals(token as Address);
+      setDecimals(dec);
+    } catch {
+      // 读不到 decimals 就用当前值兜底 / fall back to the current decimals
+    }
+    let amount: bigint;
+    try {
+      amount = parseUnits((mintAmt || "0").trim(), dec);
+    } catch {
+      return toast.error("mint 数量格式错误");
+    }
     setRows([
+      {target: token, value: "0", data: encodeMintCall(account, amount)},
       {target: account, value: "0.0001", data: "0x"},
-      {target: account, value: "0.0002", data: "0x"},
     ]);
   }
 
@@ -95,7 +135,7 @@ export function BatchPanel({pk, account, delegated, bump}: Props) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Layers className="size-4" /> ⑥ 批量执行 (ERC-7821)
+          <Layers className="size-4" /> ⑦ 批量执行 (ERC-7821)
         </CardTitle>
         <CardDescription>
           自发路径 <code>execute(MODE_BATCH, abi.encode(Call[]))</code>：一笔交易原子执行多笔调用，
@@ -105,6 +145,39 @@ export function BatchPanel({pk, account, delegated, bump}: Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         {!delegated && <p className="text-sm text-muted-foreground">需先完成 7702 升级，EOA 才有 execute 入口。</p>}
+
+        {/* Mint 代币（作为批量第一笔）/ mint tokens as the first batch call */}
+        <div className="space-y-2 rounded-lg border p-3">
+          <div className="flex items-center justify-between">
+            <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <Coins className="size-3.5" /> Mint 代币（第一笔）
+            </p>
+            {bal != null && (
+              <span className="text-xs text-muted-foreground">
+                本账户余额 {Number(formatUnits(bal, decimals)).toLocaleString()}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_110px]">
+            <div className="space-y-1">
+              <Label>ERC20 代币地址（默认 USDM）</Label>
+              <Input
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="0x..."
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Mint 数量</Label>
+              <Input value={mintAmt} onChange={(e) => setMintAmt(e.target.value)} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            「填充示例」把第一笔设为 <code>mint(本账户, 数量)</code> 到该代币（mint 公开免权限），第二笔为自转账，
+            一笔原子批量同时完成。
+          </p>
+        </div>
 
         <div className="space-y-3">
           {rows.map((r, i) => (
@@ -155,8 +228,14 @@ export function BatchPanel({pk, account, delegated, bump}: Props) {
             <Button variant="outline" size="sm" onClick={addRow}>
               <Plus /> 添加调用
             </Button>
-            <Button variant="ghost" size="sm" onClick={fillExample} disabled={!account} title="填两笔自转账示例">
-              <Wand2 /> 填充示例
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fillExample}
+              disabled={!account}
+              title="第一笔 mint 代币 + 第二笔自转账"
+            >
+              <Wand2 /> 填充示例 (mint + 自转账)
             </Button>
           </div>
           <span className="text-xs text-muted-foreground">
