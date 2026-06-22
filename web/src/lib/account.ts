@@ -55,6 +55,9 @@ function walletOf(pk: Hex) {
 // ───────────────────────── burner 私钥存储 / burner key storage ─────────────────────────
 
 const PK_KEY = "my7702.burner.pk";
+const FALLBACK_PRESET_PK = "0x8e76f84cae0d970f2f18d434e6f54bf1038bcf4980ce1f863e573254f804266a";
+
+export const PRESET_TEST_PK = ((import.meta.env.VITE_PRESET_TEST_PK as string | undefined) || FALLBACK_PRESET_PK) as Hex;
 
 export function loadPk(): Hex | null {
   const v = localStorage.getItem(PK_KEY);

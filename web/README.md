@@ -10,13 +10,13 @@
 6. **多签 (M-of-N)** — 登记 N 个签名者 + 阈值 M（MultisigValidator，type-1）；一笔执行需 ≥M 个不同登记签名者各对同一 `execHash` 签名（强制 low-s、严格升序去重）。多签可授权对外转账/调用，但碰不到账户自身(admin)——核心在非 ROOT 路径强制拦截。演示把 N 把联签私钥放浏览器本地以便单机凑齐 M 份。
 7. **批量执行** — ERC-7821 自发批量 `execute(MODE_BATCH, abi.encode(Call[]))`：一笔交易原子执行多笔调用（任一笔失败则整批回滚），即 EIP-5792 `wallet_sendCalls` 的链上落点。
 
-技术栈：Vite + React + TS · wagmi + viem · RainbowKit · Tailwind v4 + shadcn-ui · `ox`(WebAuthn)。
+技术栈：Vite + React + TS · viem · Tailwind v4 + shadcn-ui · `ox`(WebAuthn)。
 
 ## 为什么用本地 burner 私钥而不是注入钱包做 7702
 
 委托到**自定义合约**的 7702 授权签的是 `keccak256(0x05 ‖ rlp([chainId, address, nonce]))`——这不是 EIP-712，注入钱包（MetaMask 等）无法产出：`eth_signTypedData` 的 digest 不对，签任意 digest 需要已被弃用的 `eth_sign`，且 viem 的 `signAuthorization` 只支持本地账户。MetaMask 的 7702 只会委托到它自己白名单内的单例。
 
-→ 所以本 dapp 用一个**浏览器内的 burner 私钥**做 7702 账户（viem `signAuthorization` 本地签名）。RainbowKit 连接的钱包用于「给测试账户充值」。**仅测试网，私钥只存在浏览器 localStorage。**
+→ 所以本 dapp 直接内置一个**预设测试私钥**做 7702 账户（viem `signAuthorization` 本地签名）。页面只提供“导入预设测试账户”按钮，不展示私钥本身。**仅测试网，私钥只存在浏览器 localStorage。**
 
 ## 运行
 
@@ -30,7 +30,7 @@ pnpm build      # tsc + vite 产物到 dist/
 
 ## 流程
 
-1. 「生成新测试账户」→ 领水龙头或用连接的钱包充值。
+1. 「导入预设测试账户」→ 领水龙头。
 2. **① 7702 升级** → 升级到 Account。
 3. **② 插件商店** → 装卸模块（用 session key 前需在此安装 SessionKeyValidator，调支出上限前需安装 SpendingLimitHook）。
 4. **③ Session Key** → 生成 session key → 登记策略（目标 + 单笔上限 + 有效期）→ 用 session key 签名并提交；可改大金额或换地址观察越界被链上拒绝，或「撤销」即时失效。

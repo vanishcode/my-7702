@@ -1,6 +1,5 @@
 import {useCallback, useEffect, useState} from "react";
 import type {Address} from "viem";
-import {ConnectButton} from "@rainbow-me/rainbowkit";
 import {ThemeToggle} from "@/components/ThemeToggle";
 import {useBurner} from "@/lib/useBurner";
 import {getDelegation} from "@/lib/account";
@@ -16,7 +15,7 @@ import {SpendLimitPanel} from "@/components/SpendLimitPanel";
 import {MultisigPanel} from "@/components/MultisigPanel";
 
 export default function App() {
-  const {pk, address, generate, importPk, clear} = useBurner();
+  const {pk, address, importPreset, clear} = useBurner();
   const [refreshKey, setRefreshKey] = useState(0);
   const bump = useCallback(() => setRefreshKey((k) => k + 1), []);
   const [target, setTarget] = useState<Address | null | "loading">("loading");
@@ -45,14 +44,12 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <ConnectButton showBalance={false} chainStatus="icon" />
         </div>
       </header>
 
       <BurnerAccount
         address={address}
-        generate={generate}
-        importPk={importPk}
+        importPreset={importPreset}
         clear={clear}
         refreshKey={refreshKey}
         bump={bump}
@@ -73,7 +70,7 @@ export default function App() {
       <BatchPanel pk={pk} account={address} delegated={delegated} refreshKey={refreshKey} bump={bump} />
 
       <footer className="pt-2 text-center text-xs text-muted-foreground">
-        Account 实现 <span className="font-mono">{shortAddr(ADDR.accountImpl, 10, 8)}</span> · 仅测试网，私钥仅存浏览器本地
+        Account 实现 <span className="font-mono">{shortAddr(ADDR.accountImpl, 10, 8)}</span> · 仅测试网，预设私钥不在页面展示
       </footer>
     </div>
   );
