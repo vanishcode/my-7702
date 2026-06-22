@@ -24,7 +24,7 @@ import {ADDR} from "@/lib/contracts";
 import {runTx} from "@/lib/tx";
 import {shortAddr} from "@/lib/utils";
 
-const DEMO_TARGET = "0x000000000000000000000000000000000000dEaD";
+const DEMO_TARGET = "0x6ab1d676904b232fa27e0cd9a1592759c5954eff";
 
 interface Props {
   pk: Hex | null;

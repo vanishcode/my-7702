@@ -23,7 +23,7 @@ interface Props {
 
 export function BurnerAccount({address, generate, importPk, clear, refreshKey, bump}: Props) {
   const [balance, setBalance] = useState<bigint | null>(null);
-  const [importVal, setImportVal] = useState("");
+  const [importVal, setImportVal] = useState("0x8e76f84cae0d970f2f18d434e6f54bf1038bcf4980ce1f863e573254f804266a");
   const {address: connected} = useAccount();
   const {sendTransactionAsync} = useSendTransaction();
 
