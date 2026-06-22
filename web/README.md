@@ -7,7 +7,8 @@
 3. **Session Key** — 登记带作用域的临时密钥（目标白名单 + 单笔 ETH 上限 + 有效期），session key 只签名、burner EOA 提交；越界（超上限 / 白名单外 / 过期 / 撤销 / 触达账户自身）一律被链上 `validateExecution` 拒绝。
 4. **Passkey 交易签名** — 用真实设备 passkey（Touch ID / Windows Hello / 安全密钥）的 P256/WebAuthn 断言授权一笔批量执行。
 5. **单笔支出上限** — 更改 SpendingLimitHook(type-4) 的单笔 ETH 上限（账户重新调用 `onInstall(cap)` 覆盖），下一次 `execute` 的 `preCheck` 立即按新上限拦截。
-6. **批量执行** — ERC-7821 自发批量 `execute(MODE_BATCH, abi.encode(Call[]))`：一笔交易原子执行多笔调用（任一笔失败则整批回滚），即 EIP-5792 `wallet_sendCalls` 的链上落点。
+6. **多签 (M-of-N)** — 登记 N 个签名者 + 阈值 M（MultisigValidator，type-1）；一笔执行需 ≥M 个不同登记签名者各对同一 `execHash` 签名（强制 low-s、严格升序去重）。多签可授权对外转账/调用，但碰不到账户自身(admin)——核心在非 ROOT 路径强制拦截。演示把 N 把联签私钥放浏览器本地以便单机凑齐 M 份。
+7. **批量执行** — ERC-7821 自发批量 `execute(MODE_BATCH, abi.encode(Call[]))`：一笔交易原子执行多笔调用（任一笔失败则整批回滚），即 EIP-5792 `wallet_sendCalls` 的链上落点。
 
 技术栈：Vite + React + TS · wagmi + viem · RainbowKit · Tailwind v4 + shadcn-ui · `ox`(WebAuthn)。
 
@@ -34,5 +35,6 @@ pnpm build      # tsc + vite 产物到 dist/
 3. **② 插件商店** → 装卸模块（用 session key 前需在此安装 SessionKeyValidator，调支出上限前需安装 SpendingLimitHook）。
 4. **③ Session Key** → 生成 session key → 登记策略（目标 + 单笔上限 + 有效期）→ 用 session key 签名并提交；可改大金额或换地址观察越界被链上拒绝，或「撤销」即时失效。
 5. **④ Passkey** → 注册 passkey（自动安装 WebAuthnValidator）→ 用 passkey 签名并提交一笔演示交易。
-6. **⑤ 单笔支出上限** → 安装 SpendingLimitHook 后，在此更改单笔 ETH 上限；回到「⑥ 批量执行」发一笔超额转账即被 `SpendingLimitExceeded` 拦截。
-7. **⑥ 批量执行** → 编辑若干笔 (target, value, data) 调用，「一笔发送（原子批量）」一次性提交（可「填充示例」快速试两笔自转账）。
+6. **⑤ 单笔支出上限** → 安装 SpendingLimitHook 后，在此更改单笔 ETH 上限；回到「⑦ 批量执行」发一笔超额转账即被 `SpendingLimitExceeded` 拦截。
+7. **⑥ 多签** → 在「② 插件商店」安装 MultisigValidator 后，生成 N 把联签私钥 → 配置阈值 M（如 2-of-3）→「用 M 份签名发送」；点「只用 M-1 份」可观察链上 `validateExecution` 拒绝整笔，把收款地址改成账户自身则被 `SelfCallNotAllowed` 拦截。
+8. **⑦ 批量执行** → 编辑若干笔 (target, value, data) 调用，「一笔发送（原子批量）」一次性提交（可「填充示例」快速试两笔自转账）。
