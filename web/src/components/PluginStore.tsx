@@ -50,9 +50,9 @@ export function PluginStore({pk, account, delegated, refreshKey, bump}: Props) {
         {PLUGINS.map((p) => {
           const on = installed[p.key];
           return (
-            <div key={p.key} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+            <div key={p.key} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{p.name}</span>
                   <Badge variant="outline" className="text-[10px]">
                     type {p.typeId} · {p.typeLabel}
@@ -66,11 +66,12 @@ export function PluginStore({pk, account, delegated, refreshKey, bump}: Props) {
                 <p className="text-xs text-muted-foreground">{p.desc}</p>
                 <p className="font-mono text-[10px] text-muted-foreground">{shortAddr(p.address, 10, 8)}</p>
               </div>
-              <div className="shrink-0">
+              <div className="shrink-0 self-start sm:self-auto">
                 {on ? (
                   <Button
                     variant="outline"
                     size="sm"
+                    className="min-w-[4rem]"
                     disabled={!pk || !delegated}
                     onClick={() => pk && runTx(`卸载 ${p.name}`, () => uninstallModule(pk, p.typeId, p.address), bump)}
                   >
@@ -79,6 +80,7 @@ export function PluginStore({pk, account, delegated, refreshKey, bump}: Props) {
                 ) : (
                   <Button
                     size="sm"
+                    className="min-w-[4rem]"
                     disabled={!pk || !delegated}
                     onClick={() =>
                       pk &&
