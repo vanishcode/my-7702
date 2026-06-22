@@ -10,6 +10,7 @@ import {SessionKeyValidator} from "../src/modules/SessionKeyValidator.sol";
 import {WebAuthnValidator} from "../src/modules/WebAuthnValidator.sol";
 import {SpendingLimitHook} from "../src/modules/SpendingLimitHook.sol";
 import {ExampleExecutor} from "../src/modules/ExampleExecutor.sol";
+import {MultisigValidator} from "../src/modules/MultisigValidator.sol";
 import {P256Verifier} from "./vendor/P256Verifier.sol";
 
 /// @dev 测试目标合约 / a simple call target used across tests.
@@ -53,6 +54,7 @@ contract BaseTest is Test {
     WebAuthnValidator internal webauthnValidator;
     SpendingLimitHook internal spendingHook;
     ExampleExecutor internal exampleExecutor;
+    MultisigValidator internal multisigValidator;
 
     function setUp() public virtual {
         impl = new Wallet();
@@ -72,6 +74,7 @@ contract BaseTest is Test {
         webauthnValidator = new WebAuthnValidator();
         spendingHook = new SpendingLimitHook();
         exampleExecutor = new ExampleExecutor();
+        multisigValidator = new MultisigValidator();
     }
 
     // ───────────────────────── helpers ─────────────────────────
